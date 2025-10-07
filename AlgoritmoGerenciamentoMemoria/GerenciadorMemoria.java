@@ -7,14 +7,14 @@ import java.util.Map;
 
 public class GerenciadorMemoria {
 
-    private final int tamanhoTotal;
     private final int[] mapaDeBits;
     private final Map<String, InfoProcesso> processosAlocados;
     private int ultimaPosicao;
+    private final int tamanhoTotal;
 
     public GerenciadorMemoria(int tamanhoTotal) {
         if (tamanhoTotal <= 0) {
-            throw new IllegalArgumentException("O tamanho da memória deve ser um valor positivo.");
+            throw new IllegalArgumentException("O tamanho da memória deve ser positivo.");
         }
         this.tamanhoTotal = tamanhoTotal;
         this.mapaDeBits = new int[tamanhoTotal];
@@ -30,73 +30,62 @@ public class GerenciadorMemoria {
         System.out.println();
     }
 
-    public boolean alocar(String pid, int tamanho, Algoritmo algoritmo) {
-        if (processosAlocados.containsKey(pid)) {
-            System.out.printf("Erro: O processo %s já está alocado.%n", pid);
-            return false;
-        }
-        if (tamanho <= 0) {
-            System.out.printf("Erro: O tamanho do processo %s deve ser positivo.%n", pid);
-            return false;
-        }
+    public boolean isAlocado(String pid) {
+        return processosAlocados.containsKey(pid);
+    }
 
-        int indiceInicial = -1;
-        switch (algoritmo) {
-            case PRIMEIRO_ENCAIXE -> indiceInicial = primeiroEncaixe(tamanho);
-            case PROXIMO_ENCAIXE  -> indiceInicial = proximoEncaixe(tamanho);
-            case MELHOR_ENCAIXE   -> indiceInicial = melhorEncaixe(tamanho);
-            case PIOR_ENCAIXE     -> indiceInicial = piorEncaixe(tamanho);
-            case ENCAIXE_RAPIDO   -> indiceInicial = encaixeRapido(tamanho);
-        }
+    public boolean alocar(String pid, int tamanho, Algoritmo algoritmo) {
+        if (tamanho <= 0) return false;
+        
+        int indiceInicial = switch (algoritmo) {
+            case PRIMEIRO_ENCAIXE -> primeiroEncaixe(tamanho);
+            case PROXIMO_ENCAIXE  -> proximoEncaixe(tamanho);
+            case MELHOR_ENCAIXE   -> melhorEncaixe(tamanho);
+            case PIOR_ENCAIXE     -> piorEncaixe(tamanho);
+            case ENCAIXE_RAPIDO   -> encaixeRapido(tamanho);
+        };
 
         if (indiceInicial != -1) {
             Arrays.fill(mapaDeBits, indiceInicial, indiceInicial + tamanho, 1);
             processosAlocados.put(pid, new InfoProcesso(indiceInicial, tamanho));
             ultimaPosicao = (indiceInicial + tamanho) % tamanhoTotal;
-            System.out.printf("Sucesso: Processo %s (tamanho %d) alocado no bloco %d usando %s.%n",
-                pid, tamanho, indiceInicial, algoritmo);
+            // Mensagem ajustada conforme o PDF 
+            System.out.printf("Processo %s (tam %d) ENTRANDO na memória no bloco %d.%n", pid, tamanho, indiceInicial);
             return true;
         } else {
-            System.out.printf("Falha: Não há espaço contíguo para o Processo %s (tamanho %d) usando %s.%n",
-                pid, tamanho, algoritmo);
+            System.out.printf("Falha na alocação: Processo %s (tam %d) não encontrou espaço.%n", pid, tamanho);
             return false;
         }
     }
 
     public void desalocar(String pid) {
-        if (!processosAlocados.containsKey(pid)) {
-            System.out.printf("Erro: Processo %s não encontrado para desalocação.%n", pid);
-            return;
-        }
+        if (!processosAlocados.containsKey(pid)) return;
 
         InfoProcesso info = processosAlocados.get(pid);
         Arrays.fill(mapaDeBits, info.inicio(), info.inicio() + info.tamanho(), 0);
         processosAlocados.remove(pid);
-        System.out.printf("Sucesso: Processo %s desalocado. %d blocos liberados a partir do índice %d.%n",
-            pid, info.tamanho(), info.inicio());
+        // Mensagem ajustada conforme o PDF 
+        System.out.printf("Processo %s SAINDO da memória (liberou %d blocos a partir de %d).%n", pid, info.tamanho(), info.inicio());
     }
 
     public void calcularFragmentacao() {
         List<Lacuna> lacunas = encontrarLacunas();
         int memoriaLivreTotal = lacunas.stream().mapToInt(Lacuna::tamanho).sum();
         
+        System.out.println("\n--- Estatísticas de Fragmentação Externa ---");
         if (memoriaLivreTotal == 0) {
-            System.out.println("Estatísticas: A memória está totalmente ocupada.");
+            System.out.println("A memória está totalmente ocupada.");
             return;
         }
-
         int maiorLacuna = lacunas.stream().mapToInt(Lacuna::tamanho).max().orElse(0);
-
-        System.out.println("--- Estatísticas de Fragmentação ---");
         System.out.printf("Memória livre total: %d blocos%n", memoriaLivreTotal);
         System.out.printf("Número de lacunas (fragmentos): %d%n", lacunas.size());
-        System.out.printf("Tamanho da maior lacuna contígua: %d blocos%n", maiorLacuna);
+        System.out.printf("Tamanho do maior fragmento livre: %d blocos%n", maiorLacuna);
     }
     
     private List<Lacuna> encontrarLacunas() {
         List<Lacuna> lacunas = new ArrayList<>();
-        int i = 0;
-        while (i < tamanhoTotal) {
+        for (int i = 0; i < tamanhoTotal; ) {
             if (mapaDeBits[i] == 0) {
                 int inicio = i;
                 int contador = 0;
@@ -113,58 +102,39 @@ public class GerenciadorMemoria {
     }
 
     private boolean isRegiaoLivre(int inicio, int tamanho) {
-        for (int i = 0; i < tamanho; i++) {
-            if (mapaDeBits[inicio + i] == 1) return false;
-        }
+        for (int i = 0; i < tamanho; i++) if (mapaDeBits[inicio + i] == 1) return false;
         return true;
     }
 
     private int primeiroEncaixe(int tamanho) {
-        for (int i = 0; i <= tamanhoTotal - tamanho; i++) {
-            if (isRegiaoLivre(i, tamanho)) return i;
-        }
+        for (int i = 0; i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
         return -1;
     }
 
     private int proximoEncaixe(int tamanho) {
-        for (int i = ultimaPosicao; i <= tamanhoTotal - tamanho; i++) {
-            if (isRegiaoLivre(i, tamanho)) return i;
-        }
-        for (int i = 0; i < ultimaPosicao && i <= tamanhoTotal - tamanho; i++) {
-            if (isRegiaoLivre(i, tamanho)) return i;
-        }
+        for (int i = ultimaPosicao; i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
+        for (int i = 0; i < ultimaPosicao && i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
         return -1;
     }
 
     private int melhorEncaixe(int tamanho) {
-        List<Lacuna> lacunas = encontrarLacunas();
-        Lacuna melhorLacuna = new Lacuna(-1, Integer.MAX_VALUE);
-        
-        for (Lacuna lacuna : lacunas) {
-            if (lacuna.tamanho() >= tamanho && lacuna.tamanho() < melhorLacuna.tamanho()) {
-                melhorLacuna = lacuna;
-            }
-        }
-        return melhorLacuna.inicio();
+        return encontrarLacunas().stream()
+                .filter(l -> l.tamanho() >= tamanho)
+                .min((l1, l2) -> Integer.compare(l1.tamanho(), l2.tamanho()))
+                .map(Lacuna::inicio).orElse(-1);
     }
     
     private int piorEncaixe(int tamanho) {
-        List<Lacuna> lacunas = encontrarLacunas();
-        Lacuna piorLacuna = new Lacuna(-1, -1);
-
-        for (Lacuna lacuna : lacunas) {
-            if (lacuna.tamanho() >= tamanho && lacuna.tamanho() > piorLacuna.tamanho()) {
-                piorLacuna = lacuna;
-            }
-        }
-        return piorLacuna.inicio();
+        return encontrarLacunas().stream()
+                .filter(l -> l.tamanho() >= tamanho)
+                .max((l1, l2) -> Integer.compare(l1.tamanho(), l2.tamanho()))
+                .map(Lacuna::inicio).orElse(-1);
     }
 
     private int encaixeRapido(int tamanho) {
         return encontrarLacunas().stream()
-                .filter(lacuna -> lacuna.tamanho() >= tamanho)
-                .map(Lacuna::inicio)
+                .filter(l -> l.tamanho() >= tamanho)
                 .findFirst()
-                .orElse(-1);
+                .map(Lacuna::inicio).orElse(-1);
     }
 }
