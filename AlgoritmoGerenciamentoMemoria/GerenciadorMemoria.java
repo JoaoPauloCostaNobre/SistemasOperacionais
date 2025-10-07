@@ -49,7 +49,6 @@ public class GerenciadorMemoria {
             Arrays.fill(mapaDeBits, indiceInicial, indiceInicial + tamanho, 1);
             processosAlocados.put(pid, new InfoProcesso(indiceInicial, tamanho));
             ultimaPosicao = (indiceInicial + tamanho) % tamanhoTotal;
-            // Mensagem ajustada conforme o PDF 
             System.out.printf("Processo %s (tam %d) ENTRANDO na memória no bloco %d.%n", pid, tamanho, indiceInicial);
             return true;
         } else {
@@ -64,20 +63,27 @@ public class GerenciadorMemoria {
         InfoProcesso info = processosAlocados.get(pid);
         Arrays.fill(mapaDeBits, info.inicio(), info.inicio() + info.tamanho(), 0);
         processosAlocados.remove(pid);
-        // Mensagem ajustada conforme o PDF 
         System.out.printf("Processo %s SAINDO da memória (liberou %d blocos a partir de %d).%n", pid, info.tamanho(), info.inicio());
     }
 
     public void calcularFragmentacao() {
         List<Lacuna> lacunas = encontrarLacunas();
-        int memoriaLivreTotal = lacunas.stream().mapToInt(Lacuna::tamanho).sum();
+        int memoriaLivreTotal = 0;
+        for (Lacuna l : lacunas) {
+            memoriaLivreTotal += l.tamanho();
+        }
         
         System.out.println("\n--- Estatísticas de Fragmentação Externa ---");
         if (memoriaLivreTotal == 0) {
             System.out.println("A memória está totalmente ocupada.");
             return;
         }
-        int maiorLacuna = lacunas.stream().mapToInt(Lacuna::tamanho).max().orElse(0);
+        int maiorLacuna = 0;
+        for (Lacuna l : lacunas) {
+            if (l.tamanho() > maiorLacuna) {
+                maiorLacuna = l.tamanho();
+            }
+        }
         System.out.printf("Memória livre total: %d blocos%n", memoriaLivreTotal);
         System.out.printf("Número de lacunas (fragmentos): %d%n", lacunas.size());
         System.out.printf("Tamanho do maior fragmento livre: %d blocos%n", maiorLacuna);
@@ -106,35 +112,61 @@ public class GerenciadorMemoria {
         return true;
     }
 
+
+
     private int primeiroEncaixe(int tamanho) {
-        for (int i = 0; i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
+        for (int i = 0; i <= tamanhoTotal - tamanho; i++) {
+            if (isRegiaoLivre(i, tamanho)) {
+                return i;
+            }
+        }
         return -1;
     }
 
     private int proximoEncaixe(int tamanho) {
-        for (int i = ultimaPosicao; i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
-        for (int i = 0; i < ultimaPosicao && i <= tamanhoTotal - tamanho; i++) if (isRegiaoLivre(i, tamanho)) return i;
+        for (int i = ultimaPosicao; i <= tamanhoTotal - tamanho; i++) {
+            if (isRegiaoLivre(i, tamanho)) {
+                return i;
+            }
+        }
+        for (int i = 0; i < ultimaPosicao && i <= tamanhoTotal - tamanho; i++) {
+            if (isRegiaoLivre(i, tamanho)) {
+                return i;
+            }
+        }
         return -1;
     }
 
     private int melhorEncaixe(int tamanho) {
-        return encontrarLacunas().stream()
-                .filter(l -> l.tamanho() >= tamanho)
-                .min((l1, l2) -> Integer.compare(l1.tamanho(), l2.tamanho()))
-                .map(Lacuna::inicio).orElse(-1);
+        Lacuna melhorLacuna = null;
+        for (Lacuna lacunaAtual : encontrarLacunas()) {
+            if (lacunaAtual.tamanho() >= tamanho) {
+                if (melhorLacuna == null || lacunaAtual.tamanho() < melhorLacuna.tamanho()) {
+                    melhorLacuna = lacunaAtual;
+                }
+            }
+        }
+        return (melhorLacuna != null) ? melhorLacuna.inicio() : -1;
     }
     
     private int piorEncaixe(int tamanho) {
-        return encontrarLacunas().stream()
-                .filter(l -> l.tamanho() >= tamanho)
-                .max((l1, l2) -> Integer.compare(l1.tamanho(), l2.tamanho()))
-                .map(Lacuna::inicio).orElse(-1);
+        Lacuna piorLacuna = null;
+        for (Lacuna lacunaAtual : encontrarLacunas()) {
+            if (lacunaAtual.tamanho() >= tamanho) {
+                if (piorLacuna == null || lacunaAtual.tamanho() > piorLacuna.tamanho()) {
+                    piorLacuna = lacunaAtual;
+                }
+            }
+        }
+        return (piorLacuna != null) ? piorLacuna.inicio() : -1;
     }
 
     private int encaixeRapido(int tamanho) {
-        return encontrarLacunas().stream()
-                .filter(l -> l.tamanho() >= tamanho)
-                .findFirst()
-                .map(Lacuna::inicio).orElse(-1);
+        for (Lacuna lacunaAtual : encontrarLacunas()) {
+            if (lacunaAtual.tamanho() >= tamanho) {
+                return lacunaAtual.inicio(); 
+            }
+        }
+        return -1; 
     }
 }
